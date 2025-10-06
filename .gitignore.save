@@ -1,0 +1,28 @@
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Data & large files
+data/
+*.zip
+*.csv
+*.geojson
+*.tif
+*.hdf
+*.shp
+*.gpkg
+
+# Node & frontend builds
+node_modules/
+build/
+dist/
+
+# OS files
+.DS_Store
+
+
