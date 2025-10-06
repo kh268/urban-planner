@@ -27,6 +27,24 @@ It combines **satellite data**, **AI-based indicators**, and **interactive maps*
 - Predictive model for NDVI ↔ LST/AOD relationships  
 - Automatic entropy weighting for multi-factor “Hotspot” detection  
 - REST APIs for dashboard and geospatial apps
+## System Architecture
+urban-planner/
+├── urban-planner-backend/ # FastAPI backend (data + ML logic)
+│ ├── app/
+│ │ ├── main.py # Main API server
+│ │ ├── services/ # Core analytics, prediction, and loaders
+│ │ └── router/ # API routing structure
+│ ├── data/ # GeoJSON + metrics CSV
+│ └── requirements.txt
+│
+├── urban-planner-frontend/ # React + Mapbox dashboard
+│ ├── src/components/MapView.tsx
+│ ├── src/services/api.ts
+│ ├── vite.config.ts
+│ ├── .env
+│ └── build/ (after Vite build)
+│
+└── README.md 
 
 
 
