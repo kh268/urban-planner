@@ -1,4 +1,4 @@
-#Urban Planner — Bay Area Environmental Dashboard
+# Urban Planner — Bay Area Environmental Dashboard
 
 **Urban Planner** is an integrated dashboard for monitoring and simulating urban environmental health across the Bay Area.  
 It combines **satellite data**, **AI-based indicators**, and **interactive maps** to visualize how vegetation, air quality, and heat islands interact within cities — helping planners and researchers evaluate urban sustainability.
