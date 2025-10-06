@@ -1,0 +1,88 @@
+{
+  "tree_equity": [
+    {
+      "condition": "NDVI_mean < 25th_percentile and population > median",
+      "action": "Increase public greenery, green roofs, or street tree planting",
+      "data_ref": ["NDVI", "population"]
+    },
+    {
+      "condition": "NDVI_mean < 25th_percentile and landcover.agri_ratio > 0.4",
+      "action": "Exclude agricultural zones from urban green deficiency classification",
+      "data_ref": ["NDVI", "landcover"]
+    },
+    {
+      "condition": "NDVI_mean between 25th and 50th and LST_mean > 75th_percentile",
+      "action": "Expand linear green corridors or green parkways",
+      "data_ref": ["NDVI", "LST"]
+    },
+    {
+      "condition": "NDVI_mean > 75th and AOD_mean > 75th",
+      "action": "Inspect tree canopy structure (dense foliage may trap particulate matter)",
+      "data_ref": ["NDVI", "AOD"]
+    }
+  ],
+
+  "urban_heat": [
+    {
+      "condition": "LST_mean > 75th_percentile and NDVI_mean < 25th_percentile",
+      "action": "Implement cool roofs, reflective materials, and increase vegetation density",
+      "data_ref": ["LST", "NDVI"]
+    },
+    {
+      "condition": "LST_mean > 75th and landcover.urban_ratio > 0.8",
+      "action": "Recommend permeable materials and open wind corridors",
+      "data_ref": ["LST", "landcover"]
+    },
+    {
+      "condition": "LST_mean > 75th and ghsl_expansion == true",
+      "action": "Integrate cool-roof standards into new urban development plans",
+      "data_ref": ["LST", "GHSL"]
+    }
+  ],
+
+  "air_pollution": [
+    {
+      "condition": "AOD_mean > 75th and NDVI_mean < 25th",
+      "action": "Plant green barriers (evergreen, low-VOC species) along major traffic routes",
+      "data_ref": ["AOD", "NDVI"]
+    },
+    {
+      "condition": "AOD_mean > 75th and landcover.urban_ratio > 0.7",
+      "action": "Recommend emission source monitoring and establish industrial green belts",
+      "data_ref": ["AOD", "landcover"]
+    },
+    {
+      "condition": "AOD_mean > 75th and population > median",
+      "action": "Reduce vehicle traffic and increase roadside vegetation",
+      "data_ref": ["AOD", "population"]
+    },
+    {
+      "condition": "AOD_mean < 50th and LST_mean > 75th",
+      "action": "Deprioritize air pollution mitigation, focus on heat reduction",
+      "data_ref": ["AOD", "LST"]
+    }
+  ],
+
+  "population_urbanization": [
+    {
+      "condition": "population > 75th and NDVI_mean < 25th",
+      "action": "Prioritize new parks and green spaces per capita",
+      "data_ref": ["population", "NDVI"]
+    },
+    {
+      "condition": "population > 75th and LST_mean > 75th",
+      "action": "Target heat reduction: reflective materials and open-space planning",
+      "data_ref": ["population", "LST"]
+    },
+    {
+      "condition": "ghsl_expansion == true and zoning == 'Residential'",
+      "action": "Incorporate green and cool-roof standards into new residential zoning plans",
+      "data_ref": ["GHSL", "zoning"]
+    },
+    {
+      "condition": "landcover.impervious_surface > 0.7",
+      "action": "Recommend permeable pavement or green roof retrofits",
+      "data_ref": ["landcover"]
+    }
+  ]
+}
