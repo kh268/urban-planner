@@ -192,7 +192,7 @@ Response:
 ## Contributors
 
 - **Kien Han** ([@kh268](https://github.com/kh268)) — Data Science, ML, Math & Backend
-- **Ngan Huong Nguyen** 
+- **Ngan Huong Nguyen** ([@nganhuongg](https://github.com/nganhuongg)) — Data Science
 - **Linh Phuong Nguyen** 
 - **Tinh Ta**
 - **Thien Bui**
