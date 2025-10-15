@@ -1,24 +1,20 @@
-# app/services/prediction_formula.py
-
 import pandas as pd
 
-# =====================================================
-# 🔹 Predict for a single district
-# =====================================================
+# Predict for a single district
 def predict_ndvi_effect_formula(district: str, ndvi_delta_pct: float, mode: str = "formula"):
     """
     Predict how changes in NDVI affect LST and AOD
     using empirical sensitivity coefficients (Bay Area baseline).
     """
 
-    # 🔹 Empirical coefficients (Bay Area average from literature)
+    # Empirical coefficients (Bay Area average from literature)
     alpha_LST = -0.45  # NDVI↑10% → LST↓~4.5%
     alpha_AOD = -0.80  # NDVI↑10% → AOD↓~8%
 
-    # 🔹 Read baseline metrics
+    # Read baseline metrics
     df = pd.read_csv("data/metrics_summary.csv")
 
-    # Nếu district không có trong dữ liệu
+    # If districts don't exist
     if district not in df["district"].unique():
         raise ValueError(f"District '{district}' not found in metrics_summary.csv")
 
@@ -27,14 +23,14 @@ def predict_ndvi_effect_formula(district: str, ndvi_delta_pct: float, mode: str 
     ndvi_from = base["NDVI_mean"]
     ndvi_to = ndvi_from * (1 + ndvi_delta_pct / 100.0)
 
-    # 🔹 Compute predicted changes
+    # Compute predicted changes
     dLST = alpha_LST * ndvi_delta_pct
     dAOD = alpha_AOD * ndvi_delta_pct
 
     LST_pred = base["LST_mean"] * (1 + dLST / 100.0)
     AOD_pred = base["AOD_mean"] * (1 + dAOD / 100.0)
 
-    # 🔹 Return structured JSON
+    # Return structured JSON
     return {
         "district": district,
         "mode": mode,
@@ -67,9 +63,7 @@ def predict_ndvi_effect_formula(district: str, ndvi_delta_pct: float, mode: str 
     }
 
 
-# =====================================================
-# 🔹 Predict for ALL districts in the dataset
-# =====================================================
+#  Predict for ALL districts in the dataset
 def predict_all_districts(ndvi_delta_pct: float, mode: str = "formula"):
     """
     Generate predictions for *all* districts simultaneously.
