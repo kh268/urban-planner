@@ -10,23 +10,22 @@ from app.services.data_loader_city import load_city_metrics
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
-# ============================================================
-# STEP 1. Compute base environmental indicators per district
-# ============================================================
+#1. Compute base environmental indicators per district
+
 def compute_hotspots():
     df = load_metrics()
     if df.empty:
         raise ValueError("No district-level metrics found.")
 
-    # Lấy bản ghi mới nhất cho từng district
+    # Get the latest record for each district
     df_latest = df.sort_values("month").groupby("district", as_index=False).last()
 
-    # --- Compute indices ---
+    # Compute indices 
     df_latest["Tree_Equity"] = df_latest["NDVI_mean"] / (df_latest["population"] + 1e-5)
     df_latest["Heat_Exposure"] = df_latest["LST_mean"] * df_latest["population"]
     df_latest["Air_Exposure"] = df_latest["AOD_mean"] * df_latest["population"]
 
-    # --- Normalize (robust against zero division) ---
+    # Normalize (robust against zero division) 
     for col in ["Tree_Equity", "Heat_Exposure", "Air_Exposure"]:
         df_latest[col] = np.log1p(df_latest[col])  # smooth skew
         df_latest[col + "_norm"] = (
@@ -34,14 +33,12 @@ def compute_hotspots():
             (df_latest[col].max() - df_latest[col].min() + 1e-12)
         )
 
-    # --- Apply rule-based recommendations ---
+    # Apply rule-based recommendations 
     df_latest["Recommendation"] = df_latest.apply(apply_rules, axis=1)
     return df_latest
 
 
-# ============================================================
-# STEP 2. Compute hybrid weights (Entropy + PCA)
-# ============================================================
+# 2. Compute hybrid weights (Entropy + PCA)
 def compute_weights_entropy_pca(df):
     X = pd.DataFrame({
         "lack_tree": 1 - df["Tree_Equity_norm"].fillna(0),
@@ -49,7 +46,7 @@ def compute_weights_entropy_pca(df):
         "heat": df["Heat_Exposure_norm"].fillna(0)
     }).replace(0, 1e-12)
 
-    # --- Nếu dữ liệu trùng hoàn toàn ---
+    # If the data is totally similar
     if (X.std() == 0).any():
         return {
             "entropy": {"lack_tree": 1/3, "air": 1/3, "heat": 1/3},
@@ -57,21 +54,21 @@ def compute_weights_entropy_pca(df):
             "final": {"lack_tree": 1/3, "air": 1/3, "heat": 1/3},
         }
 
-    # --- Entropy ---
+    # Entropy 
     P = X.div(X.sum(axis=0), axis=1)
     k = 1.0 / np.log(len(X))
     entropy = -k * (P * np.log(P)).sum(axis=0)
     div = 1 - entropy
     w_entropy = div / div.sum()
 
-    # --- PCA ---
+    # PCA 
     X_scaled = StandardScaler().fit_transform(X)
     pca = PCA(n_components=1)
     pca.fit(X_scaled)
     loadings = np.abs(pca.components_[0])
     w_pca = loadings / loadings.sum()
 
-    # --- Combine both ---
+    # Combine both 
     w_final = (w_entropy.values + w_pca) / 2
     weights = dict(zip(X.columns, w_final))
 
@@ -82,9 +79,9 @@ def compute_weights_entropy_pca(df):
     }
 
 
-# ============================================================
-# STEP 3. Compute priority per district & rank per city
-# ============================================================
+
+# 3. Compute priority per district & rank per city
+
 def compute_priority_scores(df):
     if df.empty:
         raise ValueError("No input data provided to compute priority scores.")
@@ -123,15 +120,13 @@ def compute_priority_scores(df):
     return df_all, city_summary
 
 
-# ============================================================
-# STEP 4. Compute cross-city ranking
-# ============================================================
+# 4. Compute cross-city ranking
 def compute_city_priority_overall():
     df = load_city_metrics()
     if df.empty:
         raise ValueError("No city-level data found.")
 
-    # Tính các chỉ số tương tự như district-level
+    # Calculate similar indicators to district-level
     df["Tree_Equity"] = df["NDVI_mean"] / (df["population"] + 1e-5)
     df["Heat_Exposure"] = df["LST_mean"] * df["population"]
     df["Air_Exposure"] = df["AOD_mean"] * df["population"]
