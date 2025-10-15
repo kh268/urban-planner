@@ -16,19 +16,15 @@ from app.services.prediction_formula import (
     predict_all_districts,
 )
 
-# =====================================================
-# ⚙️ Initialize FastAPI app
-# =====================================================
+#  Initialize FastAPI app
 app = FastAPI(title="XanhInsights API")
 
-# =====================================================
-# 🌐 Core Endpoints
-# =====================================================
+#  Core Endpoints
 
 @app.get("/")
 def root():
     """Health check endpoint"""
-    return {"message": "XanhInsights backend is running 🚀"}
+    return {"message": "XanhInsights backend is running"}
 
 
 @app.get("/hotspots")
@@ -86,9 +82,8 @@ def get_priority_cities():
         return {"error": str(e)}
 
 
-# =====================================================
-# 🔮 Prediction Endpoint: NDVI → LST & AOD (Single District)
-# =====================================================
+
+# Prediction Endpoint: NDVI → LST & AOD (Single District)
 
 class NDVIEffectFormulaIn(BaseModel):
     district: str
@@ -116,9 +111,7 @@ def api_predict_ndvi_effect_formula(payload: NDVIEffectFormulaIn):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-# =====================================================
-# 🔮 Prediction Endpoint: All Districts
-# =====================================================
+# Prediction Endpoint: All Districts
 
 @app.get("/predict/all")
 def api_predict_all(ndvi_delta_pct: float = 10):
