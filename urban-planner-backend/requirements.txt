@@ -26,6 +26,7 @@ pyproj==3.7.2
 pytest==8.4.2
 python-dateutil==2.9.0.post0
 pytz==2025.2
+scikit-learn==1.8.0
 shapely==2.1.2
 six==1.17.0
 sniffio==1.3.1

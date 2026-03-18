@@ -5,22 +5,31 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from app.services.data_loader import load_metrics
 from app.services.rules import apply_rules
-from app.services.data_loader_city import load_city_metrics
+from app.services.priority_loader import load_priority_metrics
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 
 #1. Compute base environmental indicators per district
 
-def compute_hotspots():
+def compute_hotspots(month=None):
     df = load_metrics()
     if df.empty:
-        raise ValueError("No district-level metrics found.")
+        raise ValueError("No city-level metrics found.")
 
-    # Get the latest record for each district
-    df_latest = df.sort_values("month").groupby("district", as_index=False).last()
+    if month:
+        df_latest = df[df["month"] == month].copy()
+    else:
+        df_latest = df.sort_values("month").groupby("city_code_full", as_index=False).last()
 
-    # Compute indices 
+    if df_latest.empty:
+        raise ValueError("No metrics found for the requested month.")
+
+    df_latest["district"] = df_latest["city_code_full"]
+    df_latest["city"] = df_latest["city"].astype(str)
+    df_latest["county"] = df_latest["county"].astype(str)
+
+    # Compute indices
     df_latest["Tree_Equity"] = df_latest["NDVI_mean"] / (df_latest["population"] + 1e-5)
     df_latest["Heat_Exposure"] = df_latest["LST_mean"] * df_latest["population"]
     df_latest["Air_Exposure"] = df_latest["AOD_mean"] * df_latest["population"]
@@ -33,7 +42,7 @@ def compute_hotspots():
             (df_latest[col].max() - df_latest[col].min() + 1e-12)
         )
 
-    # Apply rule-based recommendations 
+    # Apply rule-based recommendations
     df_latest["Recommendation"] = df_latest.apply(apply_rules, axis=1)
     return df_latest
 
@@ -82,37 +91,78 @@ def compute_weights_entropy_pca(df):
 
 # 3. Compute priority per district & rank per city
 
-def compute_priority_scores(df):
+def compute_priority_scores(df, month=None):
     if df.empty:
         raise ValueError("No input data provided to compute priority scores.")
 
-    results = []
-    df["city"] = df["district"].apply(lambda x: str(x).split("-")[0])
+    priority_df = load_priority_metrics()
+    if priority_df.empty:
+        raise ValueError("No priority input data found.")
 
-    for city, group in df.groupby("city"):
-        try:
-            w = compute_weights_entropy_pca(group)["final"]
-        except Exception as e:
-            print(f"[WARN] Weight computation failed for {city}: {e}")
-            w = {"lack_tree": 1/3, "air": 1/3, "heat": 1/3}
-
-        group = group.copy()
-        group["Priority"] = (
-            w["lack_tree"] * (1 - group["Tree_Equity_norm"].fillna(0)) +
-            w["air"] * group["Air_Exposure_norm"].fillna(0) +
-            w["heat"] * group["Heat_Exposure_norm"].fillna(0)
+    if month and "month" in priority_df.columns:
+        latest_priority = priority_df[priority_df["month"] == month].copy()
+    else:
+        latest_priority = (
+            priority_df.sort_values("month").groupby("city_code_full", as_index=False).last().copy()
         )
-        group["city_weight_tree"] = w["lack_tree"]
-        group["city_weight_air"] = w["air"]
-        group["city_weight_heat"] = w["heat"]
-        group["Priority_rank_city"] = group["Priority"].rank(ascending=False)
-        results.append(group)
 
-    df_all = pd.concat(results, ignore_index=True)
+    if latest_priority.empty:
+        latest_priority = (
+            priority_df.sort_values("month").groupby("city_code_full", as_index=False).last().copy()
+        )
+
+    latest_priority["district"] = latest_priority["city_code_full"]
+
+    latest_priority["Tree_Equity"] = latest_priority["NDVI"] / (
+        latest_priority["population"] + 1e-5
+    )
+    latest_priority["Heat_Exposure"] = latest_priority["Heat exposure"]
+    latest_priority["Air_Exposure"] = latest_priority["AOD"]
+
+    for col in ["Tree_Equity", "Heat_Exposure", "Air_Exposure"]:
+        latest_priority[f"{col}_norm"] = (
+            latest_priority[col] - latest_priority[col].min()
+        ) / (latest_priority[col].max() - latest_priority[col].min() + 1e-12)
+
+    w = compute_weights_entropy_pca(latest_priority)["final"]
+    latest_priority["Priority"] = (
+        w["lack_tree"] * (1 - latest_priority["Tree_Equity_norm"].fillna(0))
+        + w["air"] * latest_priority["Air_Exposure_norm"].fillna(0)
+        + w["heat"] * latest_priority["Heat_Exposure_norm"].fillna(0)
+    )
+    latest_priority["city_weight_tree"] = w["lack_tree"]
+    latest_priority["city_weight_air"] = w["air"]
+    latest_priority["city_weight_heat"] = w["heat"]
+    latest_priority["Priority_rank_city"] = latest_priority["Priority"].rank(ascending=False)
+
+    df_all = latest_priority.merge(
+        df[
+            [
+                "district",
+                "city",
+                "county",
+                "month",
+                "population",
+                "NDVI_mean",
+                "NDVI_change",
+                "LST_mean",
+                "LST_change",
+                "AOD_mean",
+                "AOD_change",
+                "Recommendation",
+            ]
+        ],
+        on="district",
+        how="left",
+        suffixes=("_priority", ""),
+    )
+    if "city" not in df_all.columns and "city_priority" in df_all.columns:
+        df_all["city"] = df_all["city_priority"]
+    if "county" not in df_all.columns and "county_priority" in df_all.columns:
+        df_all["county"] = df_all["county_priority"]
 
     city_summary = (
-        df_all.groupby("city", as_index=False)["Priority"]
-        .mean()
+        df_all[["city", "Priority"]]
         .sort_values("Priority", ascending=False)
         .reset_index(drop=True)
     )
@@ -121,26 +171,7 @@ def compute_priority_scores(df):
 
 
 # 4. Compute cross-city ranking
-def compute_city_priority_overall():
-    df = load_city_metrics()
-    if df.empty:
-        raise ValueError("No city-level data found.")
-
-    # Calculate similar indicators to district-level
-    df["Tree_Equity"] = df["NDVI_mean"] / (df["population"] + 1e-5)
-    df["Heat_Exposure"] = df["LST_mean"] * df["population"]
-    df["Air_Exposure"] = df["AOD_mean"] * df["population"]
-
-    for col in ["Tree_Equity", "Heat_Exposure", "Air_Exposure"]:
-        df[col] = np.log1p(df[col])
-        df[col + "_norm"] = (df[col] - df[col].min()) / (df[col].max() - df[col].min() + 1e-12)
-
-    w = compute_weights_entropy_pca(df)["final"]
-
-    df["Priority"] = (
-        w["lack_tree"] * (1 - df["Tree_Equity_norm"]) +
-        w["air"] * df["Air_Exposure_norm"] +
-        w["heat"] * df["Heat_Exposure_norm"]
-    )
-    df["Priority_rank_region"] = df["Priority"].rank(ascending=False)
-    return df.sort_values("Priority_rank_region").reset_index(drop=True)
+def compute_city_priority_overall(month=None):
+    df_all, _ = compute_priority_scores(compute_hotspots(month=month), month=month)
+    df_all["Priority_rank_region"] = df_all["Priority"].rank(ascending=False)
+    return df_all.sort_values("Priority_rank_region").reset_index(drop=True)

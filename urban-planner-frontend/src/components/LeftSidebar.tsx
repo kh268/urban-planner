@@ -13,6 +13,8 @@ type TemperatureUnit = 'C' | 'F' | 'K';
 interface LeftSidebarProps {
   selectedCity: string;
   selectedMonth: string;
+  cityOptions: Array<{ code: string; name: string }>;
+  monthOptions: string[];
   selectedLayer: DataLayer;
   temperatureUnit: TemperatureUnit;
   onCityChange: (city: string) => void;
@@ -25,6 +27,8 @@ interface LeftSidebarProps {
 export function LeftSidebar({ 
   selectedCity, 
   selectedMonth, 
+  cityOptions,
+  monthOptions,
   selectedLayer,
   temperatureUnit,
   onCityChange,
@@ -33,15 +37,14 @@ export function LeftSidebar({
   onTemperatureUnitChange,
   onReset
 }: LeftSidebarProps) {
-  const cities = [
-    'San Francisco', 'New York City', 'Los Angeles', 'Chicago', 'Houston', 
-    'Phoenix', 'Philadelphia', 'San Antonio', 'San Diego', 'Dallas'
-  ];
-
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
+  const formatMonthLabel = (month: string) => {
+    const [year, monthPart] = month.split("-");
+    const date = new Date(`${year}-${monthPart}-01T00:00:00`);
+    if (Number.isNaN(date.getTime())) {
+      return month;
+    }
+    return date.toLocaleString("en-US", { month: "short", year: "numeric" });
+  };
 
   const layers = [
     { id: 'NDVI', label: 'NDVI (Vegetation)', color: 'from-green-100 to-green-300', icon: Tree1, stroke: '#2E7D32' },
@@ -74,8 +77,8 @@ export function LeftSidebar({
                   <SelectValue placeholder="Choose a city..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {cities.map(city => (
-                    <SelectItem key={city} value={city}>{city}</SelectItem>
+                  {cityOptions.map(city => (
+                    <SelectItem key={city.code} value={city.code}>{city.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -88,8 +91,8 @@ export function LeftSidebar({
                   <SelectValue placeholder="Choose a month..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {months.map(month => (
-                    <SelectItem key={month} value={month}>{month} 2024</SelectItem>
+                  {monthOptions.map(month => (
+                    <SelectItem key={month} value={month}>{formatMonthLabel(month)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

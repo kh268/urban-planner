@@ -1,4 +1,5 @@
 import pandas as pd
+from pathlib import Path
 
 # Predict for a single district
 def predict_ndvi_effect_formula(district: str, ndvi_delta_pct: float, mode: str = "formula"):
@@ -12,7 +13,10 @@ def predict_ndvi_effect_formula(district: str, ndvi_delta_pct: float, mode: str 
     alpha_AOD = -0.80  # NDVI↑10% → AOD↓~8%
 
     # Read baseline metrics
-    df = pd.read_csv("data/metrics_summary.csv")
+    csv_path = Path(__file__).resolve().parents[2] / "data" / "metrics_summary.csv"
+    df = pd.read_csv(csv_path)
+    if "district" not in df.columns and "city_code_full" in df.columns:
+        df["district"] = df["city_code_full"]
 
     # If districts don't exist
     if district not in df["district"].unique():
@@ -70,7 +74,10 @@ def predict_all_districts(ndvi_delta_pct: float, mode: str = "formula"):
     Used for map visualization or dashboard overview.
     """
 
-    df = pd.read_csv("data/metrics_summary.csv")
+    csv_path = Path(__file__).resolve().parents[2] / "data" / "metrics_summary.csv"
+    df = pd.read_csv(csv_path)
+    if "district" not in df.columns and "city_code_full" in df.columns:
+        df["district"] = df["city_code_full"]
     districts = df["district"].unique()
 
     results = []

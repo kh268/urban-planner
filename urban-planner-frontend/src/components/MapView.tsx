@@ -1,144 +1,184 @@
-// src/components/MapView.tsx
-import React, { useState, useEffect } from "react";
-import Map, { Source, Layer } from "react-map-gl";
+import { useEffect, useMemo, useState } from "react";
+import Map, { Layer, NavigationControl, Source } from "react-map-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { fetchHotspots } from "../services/api";
+
+import { fetchGeoJson, predictNdviEffect, type HotspotRecord } from "../services/api";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string;
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 
-export const MapView: React.FC<{ selectedLayer: string }> = ({ selectedLayer }) => {
+type DataLayer = "NDVI" | "UHI" | "AOD" | "Population" | null;
+
+interface MapViewProps {
+  selectedLayer: DataLayer;
+  hotspots: HotspotRecord[];
+  selectedDistrict?: string | null;
+  onSelectDistrict?: (district: HotspotRecord) => void;
+}
+
+export function MapView({
+  selectedLayer,
+  hotspots,
+  selectedDistrict = null,
+  onSelectDistrict,
+}: MapViewProps) {
   const [geoData, setGeoData] = useState<any>(null);
-  const [selectedFeature, setSelectedFeature] = useState<any>(null);
+  const [mapMessage, setMapMessage] = useState<string | null>("Loading map data...");
 
   useEffect(() => {
     async function loadData() {
       try {
-        console.log("🌍 Loading GeoJSON + Hotspots...");
+        const geo = await fetchGeoJson();
 
-        // --- 1️⃣ Load GeoJSON boundaries ---
-        const geoRes = await fetch(`${API_BASE_URL}/geojson`);
-        if (!geoRes.ok) throw new Error("❌ Failed to load GeoJSON");
-        const geo = await geoRes.json();
-        console.log("🗺️ GeoJSON loaded:", geo);
-
-        // --- 2️⃣ Load metrics data from backend ---
-        const data = await fetchHotspots();
-        console.log("🔥 Hotspot data (sample):", data.slice(0, 3));
-
-        // --- 3️⃣ Merge metrics vào geojson ---
-        geo.features.forEach((f: any) => {
-          const props = f.properties || {};
-          const match = data.find(
-            (x: any) =>
-              x.district === props.city_code ||
-              x.district === props.code ||
-              x.district === props.city
+        if (!geo.features?.length) {
+          setGeoData(null);
+          setMapMessage(
+            geo.metadata?.message ||
+              "No district geometry is available yet. Add data/districts.geojson to draw map boundaries.",
           );
-          if (match) {
-            f.properties = { ...props, ...match };
-          }
+          return;
+        }
+
+        const mergedFeatures = geo.features.map((feature: any) => {
+          const districtId = String(
+            feature?.properties?.district ??
+              feature?.properties?.district_id ??
+              feature?.properties?.city_code_ ??
+              feature?.properties?.code ??
+              "",
+          );
+
+          const match = hotspots.find((item) => item.district === districtId);
+          return {
+            ...feature,
+            properties: {
+              ...(feature.properties || {}),
+              ...(match || {}),
+            },
+          };
         });
 
-        console.log("✅ Merged feature example:", geo.features[0]?.properties);
-        setGeoData(geo);
-      } catch (err) {
-        console.error("❌ Load map data failed:", err);
+        setGeoData({
+          ...geo,
+          features: mergedFeatures,
+        });
+        setMapMessage(null);
+      } catch (error) {
+        console.error("Failed to load map data", error);
+        setGeoData(null);
+        setMapMessage("Failed to load map data from the backend.");
       }
     }
 
     loadData();
-  }, []);
+  }, [hotspots]);
 
-  // -------------------------------
-  // 🎨 Màu gradient cho từng lớp
-  // -------------------------------
-  const colorStops: Record<string, string[]> = {
-    NDVI: ["#f7fcf5", "#74c476", "#00441b"],          // xanh lá
-    UHI: ["#fff5f0", "#fb6a4a", "#67000d"],           // đỏ
-    AOD: ["#f7fbff", "#6baed6", "#08306b"],           // xanh dương
-    Population: ["#fcfbfd", "#9e9ac8", "#3f007d"],    // tím
-  };
+  const layerKey = useMemo(() => {
+    switch (selectedLayer) {
+      case "UHI":
+        return "uhi";
+      case "AOD":
+        return "aod";
+      case "Population":
+        return "population";
+      case "NDVI":
+      default:
+        return "ndvi";
+    }
+  }, [selectedLayer]);
 
-  const getPaint = (layer: string) => {
-    const key = layer?.toLowerCase() || "ndvi";
-    const colors = colorStops[layer] || colorStops["NDVI"];
+  const selectedFeature = useMemo(() => {
+    if (!geoData || !selectedDistrict) {
+      return null;
+    }
+    return geoData.features.find(
+      (feature: any) => feature?.properties?.district === selectedDistrict,
+    );
+  }, [geoData, selectedDistrict]);
+
+  const fillPaint = useMemo(() => {
+    const stops =
+      selectedLayer === "UHI"
+        ? [20, "#fff5f0", 25, "#fc9272", 30, "#99000d"]
+        : selectedLayer === "AOD"
+          ? [0.15, "#f7fbff", 0.22, "#6baed6", 0.3, "#08306b"]
+          : selectedLayer === "Population"
+            ? [50000, "#fcfbfd", 250000, "#9e9ac8", 1100000, "#3f007d"]
+            : [0.45, "#f7fcf5", 0.55, "#74c476", 0.65, "#00441b"];
 
     return {
-      "fill-color": [
-        "interpolate",
-        ["linear"],
-        ["get", key],
-        0, colors[0],
-        0.5, colors[1],
-        1, colors[2],
-      ],
-      "fill-opacity": 0.8,
+      "fill-color": ["interpolate", ["linear"], ["coalesce", ["get", layerKey], 0], ...stops],
+      "fill-opacity": 0.78,
       "fill-outline-color": "#ffffff",
     };
-  };
+  }, [layerKey, selectedLayer]);
 
-  // -------------------------------
-  // 🗺️ Render map
-  // -------------------------------
   return (
-    <div style={{ width: "100%", height: "100vh" }}>
-      {!geoData ? (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "100vh",
-            fontSize: "1.2rem",
-            color: "#555",
-          }}
-        >
-          🌀 Loading Bay Area Map...
-        </div>
-      ) : (
-        <Map
-          mapboxAccessToken={MAPBOX_TOKEN}
-          initialViewState={{
-            longitude: -122.27,
-            latitude: 37.80,
-            zoom: 9,
-          }}
-          mapStyle="mapbox://styles/mapbox/light-v11"
-          interactiveLayerIds={["districts"]}
-          onClick={(e) => {
-            const feature = e.features?.[0];
-            if (feature) {
-              setSelectedFeature(feature.properties);
-              console.log("🟢 Selected feature:", feature.properties);
+    <div className="relative h-full w-full">
+      <Map
+        mapboxAccessToken={MAPBOX_TOKEN}
+        initialViewState={{
+          longitude: -122.27,
+          latitude: 37.8,
+          zoom: 8.8,
+        }}
+        mapStyle="mapbox://styles/mapbox/light-v11"
+        interactiveLayerIds={geoData ? ["districts"] : []}
+        onClick={async (event) => {
+          const feature = event.features?.[0];
+          const districtId = feature?.properties?.district;
+          const match = hotspots.find((item) => item.district === districtId);
 
-              // 👉 Khi click vào district, gọi backend predict
-              fetch(`${API_BASE_URL}/predict/ndvi_effect_formula`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  district: feature.properties.district,
-                  ndvi_delta_pct: 10,
-                }),
-              })
-                .then((res) => res.json())
-                .then((pred) => {
-                  console.log("🌿 Prediction result:", pred);
-                  alert(
-                    `📍 ${feature.properties.city || feature.properties.district}\n` +
-                      `NDVI +10% → LST ↓${Math.abs(pred.predicted_change.dLST)}%, AOD ↓${Math.abs(pred.predicted_change.dAOD)}%`
-                  );
-                })
-                .catch((err) => console.error("❌ Prediction failed:", err));
-            }
-          }}
-        >
-          <Source id="bayarea" type="geojson" data={geoData}>
-            <Layer id="districts" type="fill" paint={getPaint(selectedLayer)} />
-            <Layer id="borders" type="line" paint={{ "line-color": "#333", "line-width": 0.6 }} />
+          if (!match) {
+            return;
+          }
+
+          onSelectDistrict?.(match);
+
+          try {
+            const prediction = await predictNdviEffect(match.district, 10);
+            console.log("Prediction result", prediction);
+          } catch (error) {
+            console.error("Prediction request failed", error);
+          }
+        }}
+      >
+        <NavigationControl position="top-right" />
+
+        {geoData ? (
+          <Source id="district-geometry" type="geojson" data={geoData}>
+            <Layer id="districts" type="fill" paint={fillPaint} />
+            <Layer
+              id="district-borders"
+              type="line"
+              paint={{ "line-color": "#334155", "line-width": 0.8 }}
+            />
           </Source>
-        </Map>
-      )}
+        ) : null}
+
+        {selectedFeature ? (
+          <Source
+            id="selected-district"
+            type="geojson"
+            data={{
+              type: "FeatureCollection",
+              features: [selectedFeature],
+            }}
+          >
+            <Layer
+              id="selected-district-outline"
+              type="line"
+              paint={{ "line-color": "#111827", "line-width": 2.5 }}
+            />
+          </Source>
+        ) : null}
+      </Map>
+
+      {mapMessage ? (
+        <div className="absolute left-4 top-4 max-w-md rounded-xl border border-amber-200 bg-white/95 p-4 text-sm text-slate-700 shadow-lg">
+          <p className="font-semibold text-slate-900">Map geometry unavailable</p>
+          <p className="mt-1">{mapMessage}</p>
+        </div>
+      ) : null}
     </div>
   );
-};
+}
